@@ -8,171 +8,166 @@ import soundfile as sf
 import os
 import threading
 
-# Import rumus dari file sebelah
-from dsp_module import reduce_noise, simple_equalizer, apply_echo
+# Import logika baru
+from dsp_module import process_noise_cancellation, process_echo_cancellation, process_studio_effect
 
 class AudioApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Proyek PSD: Audio Enhancer (Desktop GUI)")
-        self.root.geometry("1000x700")
+        self.root.title("PSD Project: Audio Workbench")
+        self.root.geometry("1200x800")
 
-        # Variabel global untuk data audio
-        self.y = None
+        # Variables
+        self.y_raw = None # Sinyal Mentah
         self.sr = None
-        self.processed_audio = None
-        self.file_path = None
+        self.y_processed = None # Sinyal Akhir
+        self.y_noise = None # Sinyal Noise Saja
+        self.y_clean_only = None # Sinyal Audio Saja (setelah NC, sebelum Efek)
 
-        # --- LAYOUT KIRI (KONTROL) ---
-        control_frame = tk.Frame(root, width=300, bg="#f0f0f0", padx=10, pady=10)
-        control_frame.pack(side=tk.LEFT, fill=tk.Y)
+        # --- PANEL KIRI (CONTROLS) ---
+        left_panel = tk.Frame(root, width=350, bg="#2c3e50", padx=15, pady=15)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y)
+        
+        # Header
+        tk.Label(left_panel, text="🎛️ Control Center", font=("Helvetica", 16, "bold"), fg="white", bg="#2c3e50").pack(pady=(0, 20))
 
-        tk.Label(control_frame, text="Control Panel", font=("Arial", 14, "bold"), bg="#f0f0f0").pack(pady=10)
+        # Upload Button
+        self.btn_load = tk.Button(left_panel, text="📂 1. Load Audio (.wav)", command=self.load_file, 
+                                  bg="#e74c3c", fg="white", font=("Arial", 11, "bold"), height=2, relief=tk.FLAT)
+        self.btn_load.pack(fill=tk.X, pady=5)
+        self.lbl_status = tk.Label(left_panel, text="No file loaded", fg="#bdc3c7", bg="#2c3e50")
+        self.lbl_status.pack(pady=5)
 
-        # Tombol Upload
-        tk.Button(control_frame, text="📂 Buka File (.wav)", command=self.load_file, bg="white", height=2).pack(fill=tk.X, pady=5)
-        self.lbl_filename = tk.Label(control_frame, text="File: Belum ada", bg="#f0f0f0", wraplength=200)
-        self.lbl_filename.pack(pady=5)
+        tk.Frame(left_panel, height=2, bg="#34495e").pack(fill=tk.X, pady=15)
 
-        tk.Frame(control_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=10)
-
+        # --- SLIDERS ---
         # 1. Noise Cancellation
-        self.var_nc = tk.BooleanVar()
-        tk.Checkbutton(control_frame, text="Aktifkan Noise Cancellation", variable=self.var_nc, bg="#f0f0f0", font=("Arial", 10)).pack(anchor="w")
+        tk.Label(left_panel, text="Noise Cancellation", fg="#3498db", bg="#2c3e50", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.slider_nc = tk.Scale(left_panel, from_=0.0, to=1.0, resolution=0.05, orient=tk.HORIZONTAL, bg="#2c3e50", fg="white", highlightthickness=0)
+        self.slider_nc.set(0.75) # Default agak tinggi
+        self.slider_nc.pack(fill=tk.X, pady=(0, 15))
 
-        tk.Frame(control_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=10)
+        # 2. Echo Cancellation (Gate)
+        tk.Label(left_panel, text="Echo Cancellation (Gate)", fg="#2ecc71", bg="#2c3e50", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.slider_echo = tk.Scale(left_panel, from_=0.0, to=1.0, resolution=0.05, orient=tk.HORIZONTAL, bg="#2c3e50", fg="white", highlightthickness=0)
+        self.slider_echo.set(0.0)
+        self.slider_echo.pack(fill=tk.X, pady=(0, 15))
 
-        # 2. Equalizer Sliders
-        tk.Label(control_frame, text="Equalizer", font=("Arial", 11, "bold"), bg="#f0f0f0").pack(anchor="w")
+        # 3. Studio Effect
+        tk.Label(left_panel, text="Studio Effect (Warmth + Clarity)", fg="#f1c40f", bg="#2c3e50", font=("Arial", 10, "bold")).pack(anchor="w")
+        self.slider_studio = tk.Scale(left_panel, from_=0.0, to=1.0, resolution=0.05, orient=tk.HORIZONTAL, bg="#2c3e50", fg="white", highlightthickness=0)
+        self.slider_studio.set(0.0)
+        self.slider_studio.pack(fill=tk.X, pady=(0, 15))
+
+        tk.Frame(left_panel, height=2, bg="#34495e").pack(fill=tk.X, pady=15)
+
+        # Process Button
+        self.btn_process = tk.Button(left_panel, text="⚙️ 2. Process Audio", command=self.run_processing, 
+                                     bg="#27ae60", fg="white", font=("Arial", 11, "bold"), height=2, relief=tk.FLAT)
+        self.btn_process.pack(fill=tk.X, pady=5)
+
+        # Play Button
+        self.btn_play = tk.Button(left_panel, text="▶️ 3. Play Result", command=self.play_audio, 
+                                  bg="#2980b9", fg="white", font=("Arial", 11, "bold"), height=2, relief=tk.FLAT)
+        self.btn_play.pack(fill=tk.X, pady=5)
+
+        # --- PANEL KANAN (GRAFIK) ---
+        right_panel = tk.Frame(root, bg="white")
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # Matplotlib Figure (4 Rows)
+        self.fig, self.axs = plt.subplots(4, 1, figsize=(8, 8), sharex=True)
+        self.fig.tight_layout(pad=3.0)
+        self.fig.subplots_adjust(hspace=0.5) # Jarak antar grafik
         
-        tk.Label(control_frame, text="Bass (Low)", bg="#f0f0f0").pack(anchor="w")
-        self.scale_low = tk.Scale(control_frame, from_=0, to=2, resolution=0.1, orient=tk.HORIZONTAL, bg="#f0f0f0")
-        self.scale_low.set(1.0)
-        self.scale_low.pack(fill=tk.X)
-
-        tk.Label(control_frame, text="Vocal (Mid)", bg="#f0f0f0").pack(anchor="w")
-        self.scale_mid = tk.Scale(control_frame, from_=0, to=2, resolution=0.1, orient=tk.HORIZONTAL, bg="#f0f0f0")
-        self.scale_mid.set(1.0)
-        self.scale_mid.pack(fill=tk.X)
-
-        tk.Label(control_frame, text="Treble (High)", bg="#f0f0f0").pack(anchor="w")
-        self.scale_high = tk.Scale(control_frame, from_=0, to=2, resolution=0.1, orient=tk.HORIZONTAL, bg="#f0f0f0")
-        self.scale_high.set(1.0)
-        self.scale_high.pack(fill=tk.X)
-
-        tk.Frame(control_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=10)
-
-        # 3. Echo Effect
-        self.var_echo = tk.BooleanVar()
-        tk.Checkbutton(control_frame, text="Aktifkan Echo (Delay)", variable=self.var_echo, bg="#f0f0f0", font=("Arial", 10)).pack(anchor="w")
-
-        tk.Frame(control_frame, height=2, bd=1, relief=tk.SUNKEN).pack(fill=tk.X, pady=20)
-
-        # Tombol Proses & Play
-        tk.Button(control_frame, text="⚙️ PROSES AUDIO", command=self.process_audio, bg="#4CAF50", fg="white", font=("Arial", 11, "bold"), height=2).pack(fill=tk.X, pady=5)
+        # Init Judul Grafik kosong
+        titles = ["1. Raw Signal (Input)", "2. Audio Only (Filtered)", "3. Noise Only (Removed)", "4. Final Output (Preview)"]
+        colors = ['black', 'blue', 'red', 'green']
         
-        tk.Button(control_frame, text="▶️ Play Hasil (System Player)", command=self.play_audio, bg="#2196F3", fg="white", height=2).pack(fill=tk.X, pady=5)
+        for ax, title, col in zip(self.axs, titles, colors):
+            ax.set_title(title, fontsize=9, fontweight='bold', loc='left')
+            ax.set_facecolor("#ecf0f1")
+            ax.grid(True, linestyle='--', alpha=0.6)
+            # Hilangkan label y axis biar rapi
+            ax.set_yticks([]) 
 
-        # --- LAYOUT KANAN (GRAFIK) ---
-        graph_frame = tk.Frame(root, bg="white")
-        graph_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        # Siapkan tempat untuk plot Matplotlib
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(6, 5))
-        self.fig.tight_layout(pad=4.0)
-        
-        self.canvas = FigureCanvasTkAgg(self.fig, master=graph_frame)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=right_panel)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.reset_plots()
-
-    def reset_plots(self):
-        self.ax1.clear()
-        self.ax1.set_title("Original Audio Signal")
-        self.ax1.set_xlabel("Time")
-        self.ax1.set_ylabel("Amplitude")
-        self.ax1.grid(True, alpha=0.3)
-
-        self.ax2.clear()
-        self.ax2.set_title("Processed Audio Signal")
-        self.ax2.set_xlabel("Time")
-        self.ax2.set_ylabel("Amplitude")
-        self.ax2.grid(True, alpha=0.3)
-        
-        self.canvas.draw()
 
     def load_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
-        if file_path:
-            self.file_path = file_path
-            self.lbl_filename.config(text=f"File: {os.path.basename(file_path)}")
+        path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
+        if path:
+            self.y_raw, self.sr = librosa.load(path, sr=None)
+            self.lbl_status.config(text=f"...{os.path.basename(path)}")
+            self.update_plot(0, self.y_raw, "black")
             
-            # Load audio dengan librosa
-            self.y, self.sr = librosa.load(file_path, sr=None)
-            
-            # Plot sinyal asli
-            self.ax1.clear()
-            time_axis = np.linspace(0, len(self.y) / self.sr, num=len(self.y))
-            self.ax1.plot(time_axis, self.y, color='blue', alpha=0.6)
-            self.ax1.set_title("Original Audio Signal")
-            self.ax1.grid(True, alpha=0.3)
+            # Reset grafik lain
+            for i in range(1, 4):
+                self.axs[i].clear()
+                self.axs[i].grid(True)
             self.canvas.draw()
 
-    def process_audio(self):
-        if self.y is None:
-            messagebox.showwarning("Peringatan", "Upload file audio dulu!")
+    def run_processing(self):
+        if self.y_raw is None:
+            messagebox.showwarning("Ops", "Load file dulu!")
             return
+        
+        # Jalankan di thread biar GUI gak freeze
+        t = threading.Thread(target=self.processing_logic)
+        t.start()
 
-        # Ambil nilai dari slider/checkbox
-        use_nc = self.var_nc.get()
-        use_echo = self.var_echo.get()
-        g_low = self.scale_low.get()
-        g_mid = self.scale_mid.get()
-        g_high = self.scale_high.get()
-
-        # Proses di thread terpisah biar GUI gak macet
-        # (Simpelnya kita jalankan langsung aja untuk tugas kuliah)
-        processed = self.y.copy()
+    def processing_logic(self):
+        # Ambil value slider
+        val_nc = self.slider_nc.get()
+        val_echo = self.slider_echo.get()
+        val_studio = self.slider_studio.get()
 
         # 1. Noise Cancellation
-        if use_nc:
-            print("Processing: Noise Cancellation...")
-            processed = reduce_noise(processed, self.sr)
+        # Return: Audio Bersih & Noise-nya
+        audio_clean, audio_noise = process_noise_cancellation(self.y_raw, self.sr, val_nc)
+        self.y_clean_only = audio_clean
+        self.y_noise = audio_noise
 
-        # 2. Equalizer
-        print("Processing: Equalizer...")
-        processed = simple_equalizer(processed, self.sr, g_low, g_mid, g_high)
+        # 2. Echo Cancellation (Gate pada sinyal bersih)
+        audio_gated = process_echo_cancellation(audio_clean, val_echo)
 
-        # 3. Echo
-        if use_echo:
-            print("Processing: Echo...")
-            processed = apply_echo(processed, self.sr)
+        # 3. Studio Effect (EQ pada sinyal gated)
+        self.y_processed = process_studio_effect(audio_gated, self.sr, val_studio)
 
-        self.processed_audio = processed
+        # Update Grafik di Main Thread
+        self.root.after(0, self.update_all_plots)
+        self.root.after(0, lambda: messagebox.showinfo("Done", "Processing Complete!"))
+
+    def update_plot(self, index, data, color):
+        ax = self.axs[index]
+        ax.clear()
         
-        # Plot sinyal hasil
-        self.ax2.clear()
-        time_axis = np.linspace(0, len(processed) / self.sr, num=len(processed))
-        self.ax2.plot(time_axis, processed, color='green', alpha=0.6)
-        self.ax2.set_title("Processed Audio Signal")
-        self.ax2.grid(True, alpha=0.3)
+        titles = ["1. Raw Signal (Input)", "2. Audio Only (Cleaned)", "3. Noise Only (Removed)", "4. Final Output (Preview)"]
+        ax.set_title(titles[index], fontsize=9, fontweight='bold', loc='left')
+        ax.set_facecolor("#ecf0f1")
+        
+        # Plot dengan downsampling biar cepat (tiap 100 sampel)
+        time = np.linspace(0, len(data)/self.sr, len(data))
+        ax.plot(time[::50], data[::50], color=color, lw=0.8)
+        
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.set_yticks([]) # Hilangkan angka axis Y
+
+    def update_all_plots(self):
+        self.update_plot(0, self.y_raw, "black")
+        self.update_plot(1, self.y_clean_only, "#2980b9") # Biru
+        self.update_plot(2, self.y_noise, "#c0392b")      # Merah
+        self.update_plot(3, self.y_processed, "#27ae60")  # Hijau
         self.canvas.draw()
-        
-        messagebox.showinfo("Sukses", "Audio berhasil diolah!")
 
     def play_audio(self):
-        if self.processed_audio is None:
-            messagebox.showwarning("Peringatan", "Proses audio dulu sebelum diputar!")
-            return
-            
-        # Simpan ke file sementara lalu buka pakai player bawaan Windows
-        output_filename = "hasil_output.wav"
-        sf.write(output_filename, self.processed_audio, self.sr)
-        
-        # Buka file di player default sistem (Windows Media Player / Groove)
-        if os.name == 'nt': # Windows
-            os.startfile(output_filename)
-        else: # Mac/Linux
-            os.system(f"open {output_filename}" if os.name == 'posix' else f"xdg-open {output_filename}")
+        if self.y_processed is None: return
+        out_path = "output_result.wav"
+        sf.write(out_path, self.y_processed, self.sr)
+        if os.name == 'nt':
+            os.startfile(out_path)
+        else:
+            os.system(f"open {out_path}" if os.name == 'posix' else f"xdg-open {out_path}")
 
 if __name__ == "__main__":
     root = tk.Tk()
