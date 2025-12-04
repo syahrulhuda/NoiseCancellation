@@ -42,7 +42,7 @@ cd Desktop
 
 # 2. Clone this repository (Download the code)
 
-git clone <PASTE_YOUR_REPO_URL_HERE>
+git clone git@github.com:syahrulhuda/NoiseCancellation.git
 
 
 
@@ -143,9 +143,3 @@ Telecommunication Engineering Student
 Digital Signal Processing (DSP) Final Project
 
 "Signal is King, Noise is the Enemy."
-
-
-
-### Tips buat temanmu:
-
-Di bagian `git clone <PASTE_YOUR_REPO_URL_HERE>`, pastikan temanmu mengganti teks `<PASTE_YOUR_REPO_URL_HERE>` dengan link GitHub kamu yang sebenarnya (misalnya: `https://github.com/syahrulhuda/noisecancellation.git`).
