@@ -118,6 +118,7 @@ NoiseCancellation/
 
 ## 👨‍💻 Author
 **Syahrul Huda**
+**Pascal Kaligis**
 Telecommunication Engineering Student
 *Digital Signal Processing (DSP) Final Project*
 >"Signal is King, Noise is the Enemy."
