@@ -5,54 +5,55 @@ import matplotlib.pyplot as plt, numpy as np, soundfile as sf, librosa
 import dsp_module as dsp
 
 class AudioApp:
-    def __init__(self, root):
-        self.root, self.data = root, {"raw": None, "final": None}
-        root.title("Audio Workbench Pro"); root.geometry("1100x750")
+    def __init__(self, r):
+        self.r, self.data = r, {"raw": None, "final": None}
+        r.title("DSP Ultra"); r.geometry("1000x700")
         
-        # --- UI Setup ---
-        p_ctrl = tk.Frame(root, width=300, bg="#2c3e50", padx=15, pady=20); p_ctrl.pack(side=tk.LEFT, fill=tk.Y, padx=0)
-        tk.Label(p_ctrl, text="🎛️ DSP PRO", font=("Bold", 18), fg="white", bg="#2c3e50").pack(pady=(0,20))
+        # --- UI Compact ---
+        p = tk.Frame(r, width=280, bg="#222", padx=15, pady=20); p.pack(side=tk.LEFT, fill=tk.Y)
+        tk.Label(p, text="DSP CORE", font=("Bold", 20), fg="#fff", bg="#222").pack(pady=(0,20))
         
-        btn_style = {"bg": "#e74c3c", "fg": "white", "font": ("Bold", 10), "relief": tk.FLAT, "pady": 8}
-        tk.Button(p_ctrl, text="📂 Import Audio", **btn_style, command=self.load).pack(fill=tk.X)
-        self.lbl_info = tk.Label(p_ctrl, text="-", fg="#bdc3c7", bg="#2c3e50"); self.lbl_info.pack(pady=5)
+        style = {"bg": "#e74c3c", "fg": "#fff", "font": ("Bold", 10), "relief": "flat", "pady": 6}
+        tk.Button(p, text="📂 Load WAV", **style, command=self.load).pack(fill='x')
+        self.lbl = tk.Label(p, text="-", fg="#777", bg="#222"); self.lbl.pack(pady=5)
+        
+        self.s = {} # Sliders
+        for k, t in [('nc','NOISE FILTER'), ('echo','NOISE GATE'), ('studio','STUDIO EQ')]:
+            tk.Label(p, text=t, fg="#aaa", bg="#222", anchor='w', font=("Bold", 8)).pack(fill='x', pady=(15,0))
+            self.s[k] = tk.Scale(p, from_=0, to=1, res=0.05, orient='horizontal', bg="#333", fg="white", highlightthickness=0)
+            self.s[k].pack(fill='x')
 
-        self.sliders = {}
-        for txt, key in [("Noise Reduce", "nc"), ("Echo Gate", "echo"), ("Studio EQ", "studio")]:
-            tk.Label(p_ctrl, text=txt, fg="white", bg="#2c3e50", anchor="w").pack(fill=tk.X, pady=(15,0))
-            self.sliders[key] = tk.Scale(p_ctrl, from_=0, to=1, resolution=0.05, orient=tk.HORIZONTAL, bg="#2c3e50", fg="white", highlightthickness=0)
-            self.sliders[key].pack(fill=tk.X)
+        tk.Button(p, text="⚡ EXECUTE", **{**style, "bg": "#27ae60"}, command=lambda: threading.Thread(target=self.run).start()).pack(fill='x', pady=(20,5))
+        tk.Button(p, text="▶ PLAY", **{**style, "bg": "#2980b9"}, command=self.play).pack(fill='x')
 
-        tk.Button(p_ctrl, text="⚙️ Process", **{**btn_style, "bg": "#27ae60"}, command=lambda: threading.Thread(target=self.process).start()).pack(fill=tk.X, pady=(20, 5))
-        tk.Button(p_ctrl, text="▶️ Play", **{**btn_style, "bg": "#2980b9"}, command=self.play).pack(fill=tk.X)
-
-        # --- Plotting ---
-        self.fig, self.axs = plt.subplots(4, 1, figsize=(8, 8), sharex=True); self.fig.subplots_adjust(0.05, 0.05, 0.98, 0.95, 0.3)
-        self.lines, titles = {}, ["Raw Input", "Denoised", "Noise Profile", "Master Output"]
-        for ax, t, c in zip(self.axs, titles, ['#34495e', '#2980b9', '#c0392b', '#27ae60']):
+        # --- Plot Compact ---
+        self.fig, self.axs = plt.subplots(4, 1, figsize=(6,8), sharex=True)
+        self.fig.subplots_adjust(0.05, 0.05, 0.98, 0.95, 0.25)
+        self.lines, titles = {}, ["INPUT", "DENOISED", "NOISE", "OUTPUT"]
+        for ax, t, c in zip(self.axs, titles, ['#555', '#3498db', '#e74c3c', '#2ecc71']):
             ax.set_facecolor("#ecf0f1"); ax.spines['top'].set_visible(0); ax.spines['right'].set_visible(0)
-            ax.set_title(t, loc='left', fontsize=9, fontweight='bold'); ax.set_yticks([]); ax.set_xticks([])
-            self.lines[t], = ax.plot([], [], color=c, lw=1)
-        FigureCanvasTkAgg(self.fig, root).get_tk_widget().pack(fill=tk.BOTH, expand=1, padx=10, pady=10)
+            ax.set_title(t, loc='left', fontsize=8, fontweight='bold', pad=5); ax.set_yticks([]); ax.set_xticks([])
+            self.lines[t], = ax.plot([], [], c=c, lw=0.8)
+        FigureCanvasTkAgg(self.fig, r).get_tk_widget().pack(fill='both', expand=1, padx=10, pady=10)
 
     def load(self):
         f = filedialog.askopenfilename(filetypes=[("WAV", "*.wav")])
-        if f: self.data["raw"], self.sr = librosa.load(f, sr=None); self.lbl_info['text'] = os.path.basename(f); self.update_plot(True)
+        if f: self.data["raw"], self.sr = librosa.load(f, sr=None); self.lbl['text'] = os.path.basename(f); self.upd(init=True)
 
-    def process(self):
+    def run(self):
         if self.data["raw"] is None: return
         try:
-            v = {k: s.get() for k, s in self.sliders.items()}
+            v = {k: s.get() for k, s in self.s.items()}
             self.data["clean"], self.data["noise"] = dsp.process_noise_cancellation(self.data["raw"], self.sr, v['nc'])
             self.data["final"] = dsp.process_studio_effect(dsp.process_echo_cancellation(self.data["clean"], v['echo']), self.sr, v['studio'])
-            self.root.after(0, self.update_plot)
+            self.r.after(0, self.upd)
         except Exception as e: messagebox.showerror("Err", str(e))
 
-    def update_plot(self, init=False):
-        for i, (k, t) in enumerate(zip(["raw", "clean", "noise", "final"], self.lines.keys())):
+    def upd(self, init=False):
+        for i, (k, t) in enumerate(zip(["raw", "clean", "noise", "final"], self.lines)):
             if (d := self.data.get(k)) is not None:
-                vis = d[::100]; self.lines[t].set_data(np.arange(len(vis)), vis)
-                self.axs[i].set_xlim(0, len(vis)); self.axs[i].set_ylim(vis.min(), vis.max())
+                v = d[::50]; self.lines[t].set_data(np.arange(len(v)), v)
+                self.axs[i].set_xlim(0, len(v)); self.axs[i].set_ylim(v.min(), v.max())
         self.fig.canvas.draw()
 
     def play(self):
