@@ -8,7 +8,8 @@ def bandpass_filter(data, low_cut, high_cut, fs, order=5):
 
 def process_advanced_nc(audio, sr, low_cut, strength, sensitivity):
     # 1. Frequency Isolation
-    audio = bandpass_filter(audio, low_cut, 10000, sr)
+    safe_high_cut = min(10000, (sr / 2) - 1)
+    audio = bandpass_filter(audio, low_cut, safe_high_cut, sr)
 
     if strength <= 0: return audio, np.zeros_like(audio), 0.0
 
@@ -31,6 +32,6 @@ def process_advanced_nc(audio, sr, low_cut, strength, sensitivity):
     noise = audio - final
     p_sig = np.mean(final**2)
     p_noise = np.mean(noise**2)
-    snr = 10 * np.log10((p_sig / (p_noise + 1e-9))) # +1e-9 to avoid div by zero
+    snr = 10 * np.log10((p_sig / (p_noise + 1e-9)))
 
     return final, noise, snr
