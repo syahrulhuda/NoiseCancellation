@@ -7,11 +7,11 @@ import dsp_module as dsp
 class NoiseKillerApp:
     def __init__(self, r):
         self.r, self.data = r, {"raw": None, "clean": None, "noise": None}
-        r.title("Noise Killer Workbench"); r.geometry("1100x800") # Sedikit diperlebar
+        r.title("Noise Killer Workbench"); r.geometry("1100x800") # Expanded window width
         
-        # --- UI Panel Kiri ---
+        # --- Left UI Panel ---
         p = tk.Frame(r, width=300, bg="#2c3e50", padx=15, pady=20); p.pack(side=tk.LEFT, fill=tk.Y)
-        p.pack_propagate(False) # Agar lebar panel tetap
+        p.pack_propagate(False) # Fixed width
         
         tk.Label(p, text="NOISE KILLER", font=("Impact", 24), fg="#e74c3c", bg="#2c3e50").pack(pady=(0,20))
         
@@ -19,7 +19,7 @@ class NoiseKillerApp:
         tk.Button(p, text="📂 Load Audio File", **btn_st, command=self.load).pack(fill='x')
         self.lbl_file = tk.Label(p, text="-", fg="#7f8c8d", bg="#2c3e50", font=("Arial", 8)); self.lbl_file.pack(pady=5)
 
-        # --- SLIDERS ---
+        # --- Sliders ---
         self.s = {}
         self.create_slider(p, "1. Low Cut Filter (Hz)", "cut", 20, 400, 100)
         self.create_slider(p, "2. Reduction Strength (%)", "str", 0.0, 1.0, 0.8, res=0.05)
@@ -27,10 +27,10 @@ class NoiseKillerApp:
 
         tk.Button(p, text="⚡ PROCESS AUDIO", **{**btn_st, "bg": "#27ae60"}, command=lambda: threading.Thread(target=self.run).start()).pack(fill='x', pady=(20,10))
         
-        # Stats Label
+        # SNR Stats
         self.lbl_stats = tk.Label(p, text="SNR: - dB", fg="#f1c40f", bg="#2c3e50", font=("Consolas", 12, "bold")); self.lbl_stats.pack(pady=(0, 20))
 
-        # --- PLAYBACK SECTION (REVISI: 3 Tombol Berurutan) ---
+        # --- Playback Controls ---
         tk.Label(p, text="🎧 PLAYBACK CONTROL", fg="#bdc3c7", bg="#2c3e50", font=("Arial", 8, "bold"), anchor="w").pack(fill='x', pady=(5,5))
         
         # 1. Play Original
@@ -39,12 +39,12 @@ class NoiseKillerApp:
         # 2. Play Clean
         tk.Button(p, text="▶ Play Clean Result", **{**btn_st, "bg": "#2980b9"}, command=lambda: self.play("clean")).pack(fill='x', pady=2)
         
-        # 3. Play Noise (REVISI: Tombol Baru)
+        # 3. Play Noise
         tk.Button(p, text="▶ Play Removed Noise", **{**btn_st, "bg": "#c0392b"}, command=lambda: self.play("noise")).pack(fill='x', pady=2)
 
         # --- Plotting Area ---
         self.fig, self.axs = plt.subplots(3, 1, figsize=(6,8), sharex=True)
-        # Memberi jarak lebih untuk label sumbu Y dan X
+        # Adjust layout margins
         self.fig.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.08, hspace=0.3)
         
         self.lines, titles = {}, ["Raw Input", "Clean Result", "Removed Noise"]
@@ -52,22 +52,22 @@ class NoiseKillerApp:
         
         for i, (ax, t, c) in enumerate(zip(self.axs, titles, colors)):
             ax.set_facecolor("#ecf0f1")
-            # Style modern: hilangkan border atas/kanan
+            # Modern style: remove top/right borders
             ax.spines['top'].set_visible(False) 
             ax.spines['right'].set_visible(False)
             
-            # Judul Grafik
+            # Plot Title
             ax.set_title(t, loc='left', fontsize=10, fontweight='bold', color="#2c3e50")
             
-            # REVISI: Label Sumbu Y (Amplitude) & X (Time)
+            # Axis Labels
             ax.set_ylabel("Amplitude", fontsize=8, fontweight='bold')
-            ax.tick_params(axis='y', labelsize=7) # Munculkan angka di sumbu Y
+            ax.tick_params(axis='y', labelsize=7) 
             
-            if i == 2: # Hanya grafik paling bawah yang punya label X
+            if i == 2: # Bottom plot only
                 ax.set_xlabel("Time (Samples)", fontsize=9, fontweight='bold')
-                ax.tick_params(axis='x', labelsize=7) # Munculkan angka di sumbu X
+                ax.tick_params(axis='x', labelsize=7) 
             else:
-                ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False) # Sembunyikan X di grafik atas
+                ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False) 
 
             self.lines[t], = ax.plot([], [], c=c, lw=0.8)
             
@@ -97,7 +97,7 @@ class NoiseKillerApp:
     def update_plot(self, init=False):
         for i, (k, t) in enumerate(zip(["raw", "clean", "noise"], self.lines)):
             if (d := self.data.get(k)) is not None:
-                v = d[::50] # Downsample visual
+                v = d[::50] # Visual downsampling
                 self.lines[t].set_data(np.arange(len(v)), v)
                 self.axs[i].set_xlim(0, len(v)); self.axs[i].set_ylim(v.min(), v.max())
         self.fig.canvas.draw()
