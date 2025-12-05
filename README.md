@@ -21,8 +21,9 @@ Built with **Tkinter** for the GUI and powered by **SciPy**, **NumPy**, and **No
     * Real-time visualization of **Raw Input**, **Clean Result**, and **Removed Noise Profile**.
 * **📈 Smart Metrics (New!):**
     * **SNR Estimator:** Automatically calculates the estimated **Signal-to-Noise Ratio (dB)** improvement.
-* **⏯️ A/B Comparison:**
+* **⏯️ A/B/C Comparison:**
     * Dedicated **"Play Orig"** and **"Play Clean"** buttons for instant before-after testing.
+    * **🗑️ Listen to the Noise:** Isolate and play back only the noise that was removed to verify what you're cutting.
 * **🧠 Audio Preservation:**
     * Features a **Presence Recovery** system (2kHz-5kHz boost) to prevent the "muffled" sound typical of aggressive denoising.
 
