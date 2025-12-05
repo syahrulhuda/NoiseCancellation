@@ -19,7 +19,7 @@ Built with **Tkinter** for the GUI and powered by **SciPy**, **NumPy**, and **No
     * **Aggressiveness:** Fine-tunes the spectral gating threshold to distinguish between noise and voice.
 * **📊 Visual Analysis:**
     * Real-time visualization of **Raw Input**, **Clean Result**, and **Removed Noise Profile**.
-* **📈 Smart Metrics (New!):**
+* **📈 Smart Metrics:**
     * **SNR Estimator:** Automatically calculates the estimated **Signal-to-Noise Ratio (dB)** improvement.
 * **⏯️ A/B/C Comparison:**
     * Dedicated **"Play Orig"** and **"Play Clean"** buttons for instant before-after testing.
